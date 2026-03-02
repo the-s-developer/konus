@@ -1,0 +1,20 @@
+# Swift
+.build/
+*.xcodeproj/xcuserdata/
+*.app/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# VS Code extension
+vscode-extension/node_modules/
+vscode-extension/dist/
+vscode-extension/*.vsix
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
