@@ -1,0 +1,22 @@
+services:
+  whisper-stt:
+    image: fedirz/faster-whisper-server:latest-cuda
+    container_name: whisper-stt
+    restart: unless-stopped
+    ports:
+      - "8010:8000"
+    volumes:
+      - whisper-cache:/root/.cache
+    environment:
+      - WHISPER__MODEL=Systran/faster-whisper-large-v3
+      - WHISPER__INFERENCE_DEVICE=cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  whisper-cache:
