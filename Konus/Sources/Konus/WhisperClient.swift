@@ -1,22 +1,15 @@
 import Foundation
 
-struct WhisperResult {
-    let text: String
-}
-
 final class WhisperClient {
     let baseURL: String
     let language: String  // empty = auto-detect
-    let hotwords: String
     let initialPrompt: String
 
     init(baseURL: String = "http://ground:8010/v1/audio/transcriptions",
          language: String = "",
-         hotwords: String = "bilgisayar, gönder, bitir",
          initialPrompt: String = "") {
         self.baseURL = baseURL
         self.language = language
-        self.hotwords = hotwords
         self.initialPrompt = initialPrompt
     }
 
@@ -103,11 +96,6 @@ final class WhisperClient {
         // language — only send if explicitly set
         if !language.isEmpty {
             addField("language", language)
-        }
-
-        // hotwords
-        if !hotwords.isEmpty {
-            addField("hotwords", hotwords)
         }
 
         // initial_prompt — guides Whisper for mixed language

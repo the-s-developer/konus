@@ -5,12 +5,14 @@ macOS menu bar dictation app powered by Whisper. A fast, native alternative to A
 ## Features
 
 - **Menu bar app** — lives in the status bar, no dock icon
-- **Right Cmd toggle** — single tap to start/stop dictation, double tap for Enter
+- **Configurable hotkey** — Right Cmd, Left Cmd, Fn, or F5 (changeable in Settings)
+- **Double-tap** — double-tap hotkey to press Enter
 - **Whisper STT** — uses faster-whisper-large-v3 for high quality transcription
 - **Streaming** — real-time transcription as you speak
 - **Multi-language** — auto-detects language, works with mixed Turkish/English
 - **Universal paste** — types into any focused app via CGEvent (Cmd+V)
-- **Voice commands** — say "gönder" for Enter, "bitir" to stop
+- **Bilingual UI** — Turkish and English interface
+- **Settings window** — configure hotkey, Whisper URL, and UI language
 
 ## Requirements
 
@@ -44,7 +46,7 @@ swift build -c release
 ```bash
 mkdir -p Konus.app/Contents/MacOS Konus.app/Contents/Resources
 cp .build/release/Konus Konus.app/Contents/MacOS/
-cp Info.plist Konus.app/Contents/  # see below
+cp Info.plist Konus.app/Contents/
 cp -R Konus.app /Applications/
 ```
 
@@ -55,35 +57,34 @@ cp -R Konus.app /Applications/
 
 ### 5. Use
 
-- **Right ⌘ (single tap)** — start/stop dictation
-- **Right ⌘ (double tap)** — press Enter
-- **Menu bar icon** — click for status, start/stop, quit
+- **Hotkey (single tap)** — start/stop dictation (default: Right Cmd)
+- **Hotkey (double tap)** — press Enter
+- **Menu bar icon** — click for status, start/stop, settings, quit
 
 ## Configuration
 
-Default settings in `KonusManager.swift`:
+Settings are accessible from the menu bar → Settings (⌘,). All settings persist via UserDefaults.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `whisperURL` | `http://ground:8010/v1/audio/transcriptions` | Whisper API endpoint |
-| `language` | `""` (auto) | Language code, empty for auto-detect |
-| `typingTimeout` | `0.7s` | Silence duration before sending audio |
-| `submitWord` | `gönder` | Voice command to press Enter |
-| `stopWord` | `bitir` | Voice command to stop dictation |
+| Hotkey | Right Cmd | Toggle key: Right Cmd, Left Cmd, Fn, or F5 |
+| UI Language | Turkish | Interface language: Turkish or English |
+| Whisper URL | `http://ground:8010/v1/audio/transcriptions` | Whisper API endpoint |
 
 ## Architecture
 
 ```
 ┌─────────────────────────┐
 │  StatusMenuController   │  ← Menu bar UI
-│  HotkeyManager          │  ← Right Cmd detection
+│  HotkeyManager          │  ← Configurable hotkey detection
+│  SettingsWindow         │  ← Settings UI (NSWindow)
 ├─────────────────────────┤
-│  KonusManager            │  ← State machine (idle/typing)
+│  KonusManager           │  ← State machine (idle/typing)
+│  Settings               │  ← UserDefaults persistence
 ├─────────────────────────┤
 │  AudioEngine            │  ← AVAudioEngine + VAD
 │  WhisperClient          │  ← HTTP + SSE streaming
 │  TextInserter           │  ← CGEvent Cmd+V / Enter
-│  WakeWordMatcher        │  ← Fuzzy matching (Levenshtein)
 └─────────────────────────┘
 ```
 

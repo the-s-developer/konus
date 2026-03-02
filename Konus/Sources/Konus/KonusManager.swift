@@ -17,18 +17,11 @@ final class KonusManager {
 
     private(set) var mode: KonusMode = .idle
 
-    // Settings
-    var whisperURL = "http://ground:8010/v1/audio/transcriptions"
-    var language = ""  // auto-detect
-    var hotwords = "gönder, bitir"
-    var initialPrompt = "Türkçe konuşma, teknik terimler İngilizce olabilir."
-    var submitWord = "gönder"
-    var stopWord = "bitir"
-    var typingTimeout: Double = 0.7
-
     private let audioEngine = AudioEngine()
     private lazy var whisperClient: WhisperClient = {
-        WhisperClient(baseURL: whisperURL, language: language, hotwords: hotwords, initialPrompt: initialPrompt)
+        let s = Settings.shared
+        return WhisperClient(baseURL: s.whisperURL, language: s.language,
+                             initialPrompt: s.initialPrompt)
     }()
 
     init() {
@@ -47,10 +40,10 @@ final class KonusManager {
 
     func start() {
         mode = .typing
-        audioEngine.setSilenceTimeout(typingTimeout)
+        audioEngine.setSilenceTimeout(Settings.shared.typingTimeout)
         audioEngine.start()
         delegate?.konusManager(self, didChangeMode: .typing)
-        delegate?.konusManager(self, didChangeStatus: "Yazıyor...")
+        delegate?.konusManager(self, didChangeStatus: L10n.typing)
         NSLog("[konus] Started typing mode")
     }
 
@@ -58,14 +51,14 @@ final class KonusManager {
         audioEngine.stop()
         mode = .idle
         delegate?.konusManager(self, didChangeMode: .idle)
-        delegate?.konusManager(self, didChangeStatus: "Durduruldu")
+        delegate?.konusManager(self, didChangeStatus: L10n.stopped)
         NSLog("[konus] Stopped")
     }
 
     // MARK: - Audio processing
 
     private func handleTypingAudio(_ wavData: Data) {
-        delegate?.konusManager(self, didChangeStatus: "Çevriliyor...")
+        delegate?.konusManager(self, didChangeStatus: L10n.transcribing)
         NSLog("[konus] Transcribing %d bytes...", wavData.count)
 
         Task {
@@ -78,7 +71,8 @@ final class KonusManager {
                 await MainActor.run {
                     if let text, !text.isEmpty {
                         NSLog("[konus] Transcribed: %@", text)
-                        self.processTypingText(text)
+                        TextInserter.insert(text)
+                        self.restoreStatus()
                     } else {
                         NSLog("[konus] Empty transcription")
                         self.restoreStatus()
@@ -93,60 +87,12 @@ final class KonusManager {
         }
     }
 
-    private func processTypingText(_ text: String) {
-        let stripped = text
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: ".,!?;:"))
-            .lowercased()
-
-        let words = stripped.components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-
-        // "bitir" → stop
-        let hasStop = words.contains { WakeWordMatcher.levenshtein($0, stopWord.lowercased()) <= 1 }
-        // "gönder" → Enter
-        let hasSubmit = words.contains { WakeWordMatcher.levenshtein($0, submitWord.lowercased()) <= 1 }
-
-        if hasStop {
-            let before = removeCommand(text, command: stopWord)
-            if !before.isEmpty {
-                TextInserter.insert(before)
-            }
-            stop()
-            return
-        }
-
-        if hasSubmit {
-            let before = removeCommand(text, command: submitWord)
-            if !before.isEmpty {
-                TextInserter.insert(before)
-                usleep(100_000)
-            }
-            TextInserter.pressEnter()
-            restoreStatus()
-            return
-        }
-
-        // Normal text — paste it
-        TextInserter.insert(text)
-        restoreStatus()
-    }
-
-    private func removeCommand(_ text: String, command: String) -> String {
-        let words = text.components(separatedBy: .whitespacesAndNewlines)
-        let filtered = words.filter { word in
-            let clean = word.trimmingCharacters(in: CharacterSet(charactersIn: ".,!?;:")).lowercased()
-            return WakeWordMatcher.levenshtein(clean, command.lowercased()) > 1
-        }
-        return filtered.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     private func restoreStatus() {
         switch mode {
         case .idle:
-            delegate?.konusManager(self, didChangeStatus: "Hazır")
+            delegate?.konusManager(self, didChangeStatus: L10n.ready)
         case .typing:
-            delegate?.konusManager(self, didChangeStatus: "Yazıyor...")
+            delegate?.konusManager(self, didChangeStatus: L10n.typing)
         }
     }
 }
@@ -159,7 +105,7 @@ extension KonusManager: AudioEngineDelegate {
     }
 
     func audioEngineDidStartSpeech(_ engine: AudioEngine) {
-        delegate?.konusManager(self, didChangeStatus: "Konuşma algılandı...")
+        delegate?.konusManager(self, didChangeStatus: L10n.speechDetected)
     }
 
     func audioEngine(_ engine: AudioEngine, didEndSpeechWith wavData: Data) {
@@ -170,6 +116,6 @@ extension KonusManager: AudioEngineDelegate {
 
     func audioEngine(_ engine: AudioEngine, didEncounterError message: String) {
         NSLog("[konus] Audio error: %@", message)
-        delegate?.konusManager(self, didChangeStatus: "Hata: \(message)")
+        delegate?.konusManager(self, didChangeStatus: L10n.error(message))
     }
 }

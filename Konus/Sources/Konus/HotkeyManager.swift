@@ -9,8 +9,11 @@ final class HotkeyManager {
     var onToggle: (() -> Void)?
     var onDoubleTap: (() -> Void)?   // double-tap → Enter
 
-    private var rightCmdDown = false
-    private var otherKeyWhileCmd = false
+    private var hotkeyType: HotkeyType = .rightCmd
+
+    // Modifier-key tracking
+    private var modifierDown = false
+    private var otherKeyWhileModifier = false
 
     // Double-tap detection
     private var lastTapTime: Date?
@@ -18,20 +21,12 @@ final class HotkeyManager {
     private var pendingTapWork: DispatchWorkItem?
 
     func start() {
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] _ in
-            self?.otherKeyWhileCmd = true
-        }
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.otherKeyWhileCmd = true
-            return event
-        }
+        hotkeyType = Settings.shared.hotkeyType
 
-        globalFlagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-            self?.handleFlags(event)
-        }
-        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-            self?.handleFlags(event)
-            return event
+        if hotkeyType.isModifierKey {
+            startModifierMode()
+        } else {
+            startKeyMode()
         }
     }
 
@@ -40,38 +35,108 @@ final class HotkeyManager {
         if let m = localMonitor { NSEvent.removeMonitor(m); localMonitor = nil }
         if let m = globalFlagsMonitor { NSEvent.removeMonitor(m); globalFlagsMonitor = nil }
         if let m = flagsMonitor { NSEvent.removeMonitor(m); flagsMonitor = nil }
+        pendingTapWork?.cancel()
+        pendingTapWork = nil
     }
 
-    private func handleFlags(_ event: NSEvent) {
-        let rightCmd = event.modifierFlags.contains(.command) && event.keyCode == 54
+    /// Restart with new hotkey setting
+    func restart() {
+        stop()
+        start()
+    }
 
-        if rightCmd && !rightCmdDown {
-            rightCmdDown = true
-            otherKeyWhileCmd = false
-        } else if !event.modifierFlags.contains(.command) && rightCmdDown {
-            rightCmdDown = false
-            guard !otherKeyWhileCmd else { return }
+    // MARK: - Modifier key mode (Right Cmd, Left Cmd, Fn)
 
-            let now = Date()
+    private func startModifierMode() {
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] _ in
+            self?.otherKeyWhileModifier = true
+        }
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.otherKeyWhileModifier = true
+            return event
+        }
 
-            if let last = lastTapTime, now.timeIntervalSince(last) < doubleTapInterval {
-                // Double-tap — cancel pending single tap, fire Enter
-                pendingTapWork?.cancel()
-                pendingTapWork = nil
-                lastTapTime = nil
-                DispatchQueue.main.async { [weak self] in
-                    self?.onDoubleTap?()
-                }
-            } else {
-                // First tap — wait a bit to see if second comes
-                lastTapTime = now
-                let work = DispatchWorkItem { [weak self] in
-                    self?.lastTapTime = nil
-                    self?.onToggle?()
-                }
-                pendingTapWork = work
-                DispatchQueue.main.asyncAfter(deadline: .now() + doubleTapInterval, execute: work)
+        globalFlagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.handleModifierFlags(event)
+        }
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.handleModifierFlags(event)
+            return event
+        }
+    }
+
+    private func handleModifierFlags(_ event: NSEvent) {
+        guard let targetKeyCode = hotkeyType.keyCode else { return }
+
+        let isTargetDown: Bool
+        switch hotkeyType {
+        case .rightCmd, .leftCmd:
+            isTargetDown = event.modifierFlags.contains(.command) && event.keyCode == targetKeyCode
+        case .fn:
+            isTargetDown = event.modifierFlags.contains(.function) && event.keyCode == targetKeyCode
+        default:
+            return
+        }
+
+        let isReleased: Bool
+        switch hotkeyType {
+        case .rightCmd, .leftCmd:
+            isReleased = !event.modifierFlags.contains(.command) && modifierDown
+        case .fn:
+            isReleased = !event.modifierFlags.contains(.function) && modifierDown
+        default:
+            return
+        }
+
+        if isTargetDown && !modifierDown {
+            modifierDown = true
+            otherKeyWhileModifier = false
+        } else if isReleased {
+            modifierDown = false
+            guard !otherKeyWhileModifier else { return }
+            handleTap()
+        }
+    }
+
+    // MARK: - Function key mode (F5)
+
+    private func startKeyMode() {
+        guard let vk = hotkeyType.virtualKey else { return }
+
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == vk {
+                self?.handleTap()
             }
+        }
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == vk {
+                self?.handleTap()
+                return nil // consume
+            }
+            return event
+        }
+    }
+
+    // MARK: - Tap / double-tap logic
+
+    private func handleTap() {
+        let now = Date()
+
+        if let last = lastTapTime, now.timeIntervalSince(last) < doubleTapInterval {
+            pendingTapWork?.cancel()
+            pendingTapWork = nil
+            lastTapTime = nil
+            DispatchQueue.main.async { [weak self] in
+                self?.onDoubleTap?()
+            }
+        } else {
+            lastTapTime = now
+            let work = DispatchWorkItem { [weak self] in
+                self?.lastTapTime = nil
+                self?.onToggle?()
+            }
+            pendingTapWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + doubleTapInterval, execute: work)
         }
     }
 
