@@ -27,9 +27,10 @@ final class StatusMenuController: NSObject {
         hotkeyManager.onToggle = { [weak self] in
             self?.manager.toggle()
         }
-        hotkeyManager.onDoubleTap = {
-            NSLog("[konus] Double-tap → Enter")
+        hotkeyManager.onDoubleTap = { [weak self] in
+            NSLog("[konus] Double-tap → Enter + Stop")
             TextInserter.pressEnter()
+            self?.manager.stop()
         }
         hotkeyManager.start()
 
