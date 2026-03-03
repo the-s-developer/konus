@@ -99,6 +99,40 @@ Settings are accessible from the menu bar → Settings (⌘,). All settings pers
 └─────────────────────────┘
 ```
 
+## ASR Server Options
+
+### `qwen3-asr-17/` — Qwen3-ASR-1.7B (recommended)
+
+Custom FastAPI server wrapping Alibaba's [Qwen3-ASR-1.7B](https://huggingface.co/Qwen/Qwen3-ASR-1.7B) model.
+
+- **Port:** 8020
+- **GPU VRAM:** ~4 GB (bfloat16)
+- **Languages:** 52 (Turkish, English, German, French, Spanish, Arabic, Chinese, Japanese, Korean, …)
+- **API:** OpenAI-compatible `/v1/audio/transcriptions` (JSON + SSE streaming)
+- **Files:** `server.py` (FastAPI app), `Dockerfile` (CUDA 12.4 + PyTorch + qwen-asr), `docker-compose.yml`
+
+```bash
+cd qwen3-asr-17
+docker compose up -d --build
+# Health check: curl http://localhost:8020/health
+```
+
+### `whisper/` — Faster Whisper Large V3
+
+Pre-built [faster-whisper-server](https://github.com/fedirz/faster-whisper-server) image with `Systran/faster-whisper-large-v3`.
+
+- **Port:** 8010
+- **GPU VRAM:** ~6 GB
+- **Languages:** 99+
+- **API:** OpenAI-compatible `/v1/audio/transcriptions` (JSON + SSE streaming)
+- **Files:** `docker-compose.yml` only (uses upstream Docker image)
+
+```bash
+cd whisper
+docker compose up -d
+# Health check: curl http://localhost:8010/health
+```
+
 ## Author
 
 Created by **Ahmet Can**
