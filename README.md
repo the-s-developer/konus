@@ -1,15 +1,15 @@
 # Konus
 
-macOS menu bar dictation app powered by Whisper. A fast, native alternative to Apple Dictation that uses your own Whisper server for speech-to-text.
+macOS menu bar dictation app powered by Whisper / Qwen3-ASR. A fast, native alternative to Apple Dictation that uses your own ASR server for speech-to-text.
 
 ## Features
 
 - **Menu bar app** — lives in the status bar, no dock icon
 - **Configurable hotkey** — Right Cmd, Left Cmd, Fn, or F5 (changeable in Settings)
 - **Double-tap** — double-tap hotkey to press Enter
-- **Whisper STT** — uses faster-whisper-large-v3 for high quality transcription
+- **Flexible ASR backend** — supports Whisper (faster-whisper-large-v3) or Qwen3-ASR-1.7B
 - **Streaming** — real-time transcription as you speak
-- **Multi-language** — auto-detects language, works with mixed Turkish/English
+- **Multi-language** — auto-detects language, works with 50+ languages including Turkish/English
 - **Universal paste** — types into any focused app via CGEvent (Cmd+V)
 - **Bilingual UI** — Turkish and English interface
 - **Settings window** — configure hotkey, Whisper URL, and UI language
@@ -23,16 +23,27 @@ macOS menu bar dictation app powered by Whisper. A fast, native alternative to A
 
 ## Quick Start
 
-### 1. Start the Whisper Server
+### 1. Start the ASR Server
 
-You need a machine with an NVIDIA GPU:
+You need a machine with an NVIDIA GPU. Choose one of the following:
+
+#### Option A: Qwen3-ASR-1.7B (recommended)
+
+```bash
+cd qwen3-asr-17
+docker compose up -d
+```
+
+Runs Qwen3-ASR-1.7B on port 8020. Supports 52 languages with superior accuracy.
+
+#### Option B: Faster Whisper
 
 ```bash
 cd whisper
 docker compose up -d
 ```
 
-This runs `faster-whisper-server` with `Systran/faster-whisper-large-v3` on port 8010.
+Runs `faster-whisper-server` with `Systran/faster-whisper-large-v3` on port 8010.
 
 ### 2. Build & Run
 
@@ -69,7 +80,7 @@ Settings are accessible from the menu bar → Settings (⌘,). All settings pers
 |---------|---------|-------------|
 | Hotkey | Right Cmd | Toggle key: Right Cmd, Left Cmd, Fn, or F5 |
 | UI Language | Turkish | Interface language: Turkish or English |
-| Whisper URL | `http://ground:8010/v1/audio/transcriptions` | Whisper API endpoint |
+| ASR URL | `http://ground:8010/v1/audio/transcriptions` | ASR API endpoint (OpenAI-compatible) |
 
 ## Architecture
 
