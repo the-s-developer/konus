@@ -11,7 +11,7 @@ protocol AudioEngineDelegate: AnyObject {
 final class AudioEngine {
     weak var delegate: AudioEngineDelegate?
 
-    private let engine = AVAudioEngine()
+    private var engine = AVAudioEngine()
     private var isRunning = false
     private var tapInstalled = false
 
@@ -40,6 +40,32 @@ final class AudioEngine {
     // Frame size: 30ms at 16kHz = 480 samples = 960 bytes
     private var frameBytes: Int { Int(sampleRate * frameDuration) * bytesPerSample }
     private var pendingData = Data()
+
+    init() {
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(handleConfigChange),
+            name: .AVAudioEngineConfigurationChange, object: nil
+        )
+    }
+
+    @objc private func handleConfigChange(_ notification: Notification) {
+        NSLog("[konus] Audio configuration changed (device switch)")
+        let wasRunning = isRunning
+        if isRunning {
+            engine.stop()
+            isRunning = false
+        }
+        // Tear down old tap and engine, create fresh one
+        if tapInstalled {
+            engine.inputNode.removeTap(onBus: 0)
+            tapInstalled = false
+        }
+        engine = AVAudioEngine()
+        resetState()
+        if wasRunning {
+            start()
+        }
+    }
 
     func setSilenceTimeout(_ seconds: Double) {
         silenceTimeoutSeconds = seconds
