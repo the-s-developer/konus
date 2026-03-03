@@ -107,6 +107,7 @@ Custom FastAPI server wrapping Alibaba's [Qwen3-ASR-1.7B](https://huggingface.co
 
 - **Port:** 8020
 - **GPU VRAM:** ~4 GB (bfloat16)
+- **WER:** 3.05% (English), 5.63% (multilingual avg)
 - **Languages:** 52 (Turkish, English, German, French, Spanish, Arabic, Chinese, Japanese, Korean, …)
 - **API:** OpenAI-compatible `/v1/audio/transcriptions` (JSON + SSE streaming)
 - **Files:** `server.py` (FastAPI app), `Dockerfile` (CUDA 12.4 + PyTorch + qwen-asr), `docker-compose.yml`
@@ -123,6 +124,7 @@ Pre-built [faster-whisper-server](https://github.com/fedirz/faster-whisper-serve
 
 - **Port:** 8010
 - **GPU VRAM:** ~6 GB
+- **WER:** 8.7% (English), ~10% (multilingual avg)
 - **Languages:** 99+
 - **API:** OpenAI-compatible `/v1/audio/transcriptions` (JSON + SSE streaming)
 - **Files:** `docker-compose.yml` only (uses upstream Docker image)
