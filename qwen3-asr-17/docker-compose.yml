@@ -1,0 +1,22 @@
+services:
+  qwen3-asr:
+    build: .
+    container_name: qwen3-asr-1.7b
+    restart: unless-stopped
+    ports:
+      - "8020:8000"
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    shm_size: "4gb"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  hf-cache:

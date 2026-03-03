@@ -13,6 +13,7 @@ final class AudioEngine {
 
     private let engine = AVAudioEngine()
     private var isRunning = false
+    private var tapInstalled = false
 
     // Audio format
     private let sampleRate: Double = 16000
@@ -50,54 +51,63 @@ final class AudioEngine {
         let inputNode = engine.inputNode
         let hwFormat = inputNode.outputFormat(forBus: 0)
 
-        // Target format: 16kHz mono 16-bit integer
-        guard let targetFormat = AVAudioFormat(
-            commonFormat: .pcmFormatInt16,
-            sampleRate: sampleRate,
-            channels: AVAudioChannelCount(channels),
-            interleaved: true
-        ) else {
-            delegate?.audioEngine(self, didEncounterError: "Cannot create target audio format")
+        guard hwFormat.sampleRate > 0, hwFormat.channelCount > 0 else {
+            delegate?.audioEngine(self, didEncounterError: "No audio input available")
             return
         }
 
-        guard let converter = AVAudioConverter(from: hwFormat, to: targetFormat) else {
-            delegate?.audioEngine(self, didEncounterError: "Cannot create audio converter")
-            return
-        }
-
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: hwFormat) { [weak self] buffer, _ in
-            guard let self else { return }
-
-            // Convert to 16kHz mono Int16
-            let outputBuffer = AVAudioPCMBuffer(
-                pcmFormat: targetFormat,
-                frameCapacity: AVAudioFrameCount(Double(buffer.frameLength) * self.sampleRate / hwFormat.sampleRate) + 100
-            )!
-
-            var error: NSError?
-            let status = converter.convert(to: outputBuffer, error: &error) { _, outStatus in
-                outStatus.pointee = .haveData
-                return buffer
+        // Install tap only once — never remove it, just start/stop the engine
+        if !tapInstalled {
+            guard let targetFormat = AVAudioFormat(
+                commonFormat: .pcmFormatInt16,
+                sampleRate: sampleRate,
+                channels: AVAudioChannelCount(channels),
+                interleaved: true
+            ) else {
+                delegate?.audioEngine(self, didEncounterError: "Cannot create target audio format")
+                return
             }
 
-            guard status != .error, error == nil else { return }
-
-            let byteCount = Int(outputBuffer.frameLength) * self.bytesPerSample
-            guard byteCount > 0, let int16Data = outputBuffer.int16ChannelData else { return }
-
-            let data = Data(bytes: int16Data[0], count: byteCount)
-            self.pendingData.append(data)
-
-            // Process complete frames
-            while self.pendingData.count >= self.frameBytes {
-                let frame = self.pendingData.prefix(self.frameBytes)
-                self.pendingData = Data(self.pendingData.dropFirst(self.frameBytes))
-                self.processFrame(frame)
+            guard let converter = AVAudioConverter(from: hwFormat, to: targetFormat) else {
+                delegate?.audioEngine(self, didEncounterError: "Cannot create audio converter")
+                return
             }
+
+            inputNode.installTap(onBus: 0, bufferSize: 4096, format: hwFormat) { [weak self] buffer, _ in
+                guard let self, self.isRunning else { return }
+
+                // Convert to 16kHz mono Int16
+                let outputBuffer = AVAudioPCMBuffer(
+                    pcmFormat: targetFormat,
+                    frameCapacity: AVAudioFrameCount(Double(buffer.frameLength) * self.sampleRate / hwFormat.sampleRate) + 100
+                )!
+
+                var error: NSError?
+                let status = converter.convert(to: outputBuffer, error: &error) { _, outStatus in
+                    outStatus.pointee = .haveData
+                    return buffer
+                }
+
+                guard status != .error, error == nil else { return }
+
+                let byteCount = Int(outputBuffer.frameLength) * self.bytesPerSample
+                guard byteCount > 0, let int16Data = outputBuffer.int16ChannelData else { return }
+
+                let data = Data(bytes: int16Data[0], count: byteCount)
+                self.pendingData.append(data)
+
+                // Process complete frames
+                while self.pendingData.count >= self.frameBytes {
+                    let frame = self.pendingData.prefix(self.frameBytes)
+                    self.pendingData = Data(self.pendingData.dropFirst(self.frameBytes))
+                    self.processFrame(frame)
+                }
+            }
+            tapInstalled = true
         }
 
         do {
+            engine.prepare()
             try engine.start()
             isRunning = true
             resetState()
@@ -107,8 +117,6 @@ final class AudioEngine {
     }
 
     func stop() {
-        guard isRunning else { return }
-        engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         isRunning = false
 
